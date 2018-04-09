@@ -1,0 +1,7 @@
+{
+    "name": "crossdrive",
+    "dependencies": {
+        "googleapis": "^28.1.0",
+        "openpgp": "^3.0.4"
+    }
+}
