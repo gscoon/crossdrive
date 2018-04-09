@@ -1,7 +1,7 @@
 ## Functionality
 - Connect to multiple cloud storage providers
 - Pull file(s) from a directory
-- Upload file(s) from a directory
+- Upload file(s) to a directory
 - Encrypt and decrypt files using OpenPGP
 - Authenticate a person?
 
