@@ -6,33 +6,33 @@ const util          = require('../util');
 
 const PROVIDER_KEY  = 'googledrive';
 
-var CLIENT;
-var SCOPES        = [];
-var DRIVE;
+var Client;
+var Drive;
+var Scopes = [];
 
 module.exports = {
     authorize       : authorize,
     completeAuth    : completeAuth,
     checkClient     : checkClient,
     createClient    : createClient,
-    getFiles        : getFiles,
+    listFiles       : listFiles,
+    getChildren     : getChildren,
     createFile      : createFile,
+    uploadFile      : createFile,
 }
 
 // title
 // modifiedDate
 // pageSize
 
-function getFiles(options, query){
+function listFiles(options, query){
     return new Promise((resolve, reject)=>{
-
         options = options || {};
         options.pageSize = options.pageSize || 40;
         if(options.query)
             options.q = transformQuery(options.query);
 
-        const drive = google.drive({version: 'v3', auth: CLIENT});
-        DRIVE.files.list(options, (err, response) => {
+        Drive.files.list(options, (err, response) => {
             if(err)
                 return reject(err);
 
@@ -43,6 +43,25 @@ function getFiles(options, query){
             resolve(response);
         })
     })
+}
+
+function getChildren(parentID){
+    return new Promise((resolve, reject)=>{
+        if(typeof parentID === 'object')
+            parentID = parentID.id;
+
+        var query = "'" + parentID + "' in parents";
+        Drive.files.list({q: query}, (err, response)=>{
+            if(err)
+                return reject(err);
+
+            resolve({
+                data : response.data.files.map(normalizeListings),
+                next : response.data.nextPageToken,
+            })
+        })
+    })
+
 }
 
 function createFile(options){
@@ -65,7 +84,7 @@ function createFile(options){
         if(options.folder)
             resource.parents = [options.folder]
 
-        DRIVE.files.create({
+        Drive.files.create({
             resource,
             media,
         }, function (err, results) {
@@ -79,25 +98,25 @@ function createFile(options){
 }
 
 function createClient(credentials, scopes){
-    CLIENT = new OAuth2Client(credentials.clientID, credentials.clientSecret, credentials.redirectURL);
+    Client = new OAuth2Client(credentials.clientID, credentials.clientSecret, credentials.redirectURL);
 
-    DRIVE = google.drive({version: 'v3', auth: CLIENT});
+    Drive = google.drive({version: 'v3', auth: Client});
 
     if(!Array.isArray(scopes))
         scopes = [scopes];
 
-    SCOPES = scopes;
+    Scopes = scopes;
 }
 
 
 function checkClient(){
-    return !!CLIENT;
+    return !!Client;
 }
 
 function authorize() {
     return new Promise(function(resolve, reject){
         console.log("Authorizing...")
-        if(!CLIENT)
+        if(!Client)
             return reject('Bad client');
 
         util.getToken(PROVIDER_KEY)
@@ -119,13 +138,13 @@ function authorize() {
 }
 
 function setToken(token){
-    CLIENT.setCredentials(token);
+    Client.setCredentials(token);
 }
 
 function requestAuthURL(){
-    const authUrl = CLIENT.generateAuthUrl({
+    const authUrl = Client.generateAuthUrl({
         access_type : 'offline',
-        scope       : SCOPES,
+        scope       : Scopes,
     });
 
     return authUrl;
@@ -134,7 +153,7 @@ function requestAuthURL(){
 // after user returns with code
 function completeAuth(code){
     return new Promise((resolve, reject)=>{
-        CLIENT.getToken(code, (err, token) => {
+        Client.getToken(code, (err, token) => {
             if(err)
                 return reject(err);
 
