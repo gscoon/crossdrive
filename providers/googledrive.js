@@ -1,5 +1,7 @@
 const fs            = require('fs');
 const {google}      = require('googleapis');
+const async         = require('async');
+const Path          = require('path');
 const OAuth2Client  = google.auth.OAuth2;
 
 const util          = require('../util');
@@ -9,30 +11,139 @@ const PROVIDER_KEY  = 'googledrive';
 var Client;
 var Drive;
 var Scopes = [];
+var CachedPaths = {};
 
 module.exports = {
     authorize       : authorize,
     completeAuth    : completeAuth,
     checkClient     : checkClient,
     createClient    : createClient,
-    listFiles       : listFiles,
-    getChildren     : getChildren,
-    createFile      : createFile,
+    list            : listFiles,
     uploadFile      : createFile,
+    createFolder    : createFolder,
 }
 
-// title
-// modifiedDate
-// pageSize
+function getFolderID(dirPath, doMakeDir){
+    var key = keyify(dirPath);
 
-function listFiles(options, query){
+    if(CachedPaths[key] && CachedPaths[key]['id'])
+        return Promise.resolve(CachedPaths[key]['id']);
+
+    return setAllFolderIDs(key, doMakeDir)
+}
+
+function keyify(dirPath){
+    if(dirPath.charAt(0) !== '/')
+        dirPath = '/' + dirPath;
+
+    if(dirPath.slice(-1) === '/')
+        dirPath = dirPath.slice(0,-1);
+
+    return dirPath
+}
+
+// 1. loop through each folder
+// 2. return folder ID for each level
+// 3. If doesnt exist, pull from provider
+// 4. If doesnt exist in provider, then create
+
+function setAllFolderIDs(dirPath, makeDir){
     return new Promise((resolve, reject)=>{
-        options = options || {};
-        options.pageSize = options.pageSize || 40;
-        if(options.query)
-            options.q = transformQuery(options.query);
+        var breakDown = breakDownFolders(dirPath);
+        if(!breakDown || !breakDown.length)
+            return resolve(null);
 
-        Drive.files.list(options, (err, response) => {
+        async.eachOfSeries(breakDown, (dir, index, next)=>{
+            if(CachedPaths[dir] && CachedPaths[dir]['id'])
+                return next();
+
+            var parentID = null;
+
+            if(index > 0)
+                parentID = CachedPaths[breakDown[index - 1]]['id'];
+
+            return pullOrCreate(dir, parentID, makeDir)
+            .then((folderID)=>{
+                next(!folderID);
+            })
+        }, ()=>{
+            if(CachedPaths[dirPath])
+                resolve(CachedPaths[dirPath]['id']);
+            else
+                resolve(null)
+        })
+    })
+}
+
+function pullOrCreate(dirPath, parentID, doCreate){
+    var basename = Path.basename(dirPath);
+
+    return doList(basename, parentID)
+    .then((results)=>{
+        if(results.data.length){
+            var id = results.data[0]['id'];
+            setCache(dirPath, id);
+            return id;
+        }
+        // only do this in "write " situations
+        if(!doCreate)
+            return null;
+
+        return createFolder(dirPath)
+        .then((item)=>{
+            return item.id;
+        })
+    })
+}
+
+function setCache(p, id){
+    if(!id)
+        return;
+
+    CachedPaths[p] = {
+        key         : p,
+        basename    : Path.basename(p),
+        id          : id,
+    }
+}
+
+// turn path into array of paths
+// "/aa/bb" => ["/aa", "/aa/bb"]
+function breakDownFolders(p){
+    var ret = [];
+    var pSplit = p.split('/');
+    pSplit.forEach((x, index)=>{
+        var key = pSplit.slice(0,index+1).join('/');
+        if(!key || key === '/') return;
+        ret.push(key);
+    })
+    return ret;
+}
+
+function listFiles(dirPath){
+    return getFolderID(dirPath)
+    .then((folderID)=>{
+        if(!folderID)
+            return false;
+
+        return doList(null, folderID);
+    })
+}
+
+function doList(name, parentID){
+    return new Promise((resolve, reject)=>{
+        var queryObj = {};
+        if(parentID){
+            if(typeof parentID === 'object')
+                parentID = parentID.id;
+
+            queryObj[parentID] = ['in', 'parents'];
+        }
+
+        if(name)
+            queryObj.name = name;
+
+        Drive.files.list({q: transformQuery(queryObj)}, (err, response)=>{
             if(err)
                 return reject(err);
 
@@ -40,36 +151,41 @@ function listFiles(options, query){
                 data : response.data.files.map(normalizeListings),
                 next : response.data.nextPageToken,
             })
-            resolve(response);
-        })
-    })
-}
-
-function getChildren(parentID){
-    return new Promise((resolve, reject)=>{
-        if(typeof parentID === 'object')
-            parentID = parentID.id;
-
-        var query = "'" + parentID + "' in parents";
-        Drive.files.list({q: query}, (err, response)=>{
-            if(err)
-                return reject(err);
-
-            resolve({
-                data : response.data.files.map(normalizeListings),
-                next : response.data.nextPageToken,
-            })
         })
     })
 
 }
 
-function createFile(options){
+function createFile(filePath, type, body){
+    var parentPath = Path.dirname(filePath);
+    return getFolderID(parentPath, true)
+    .then((parentID)=>{
+        return doCreate({
+            type        : type,
+            name        : Path.basename(filePath),
+            body        : body,
+            folder      : parentID,
+        })
+    })
+    .then((item)=>{
+        setCache(filePath, item.id);
+        return item;
+    })
+}
+
+function createFolder(folderPath){
+    return createFile(folderPath, 'folder');
+}
+
+function doCreate(options){
     return new Promise((resolve, reject)=>{
         var resource = {
             mimeType    : options.type,
-            name        : options.title
+            name        : options.name
         }
+
+        if(['folder','directory'].indexOf(options.type) > -1)
+            resource.mimeType = 'application/vnd.google-apps.folder';
 
         var media = {
             mimeType    : options.type,
@@ -77,9 +193,6 @@ function createFile(options){
 
         if(options.body)
             media.body = options.body;
-
-        if(options.type === 'folder')
-            resource.mimeType = 'application/vnd.google-apps.folder';
 
         if(options.folder)
             resource.parents = [options.folder]
@@ -94,7 +207,6 @@ function createFile(options){
             return resolve(normalizeListings(results.data))
         });
     })
-
 }
 
 function createClient(credentials, scopes){
@@ -115,7 +227,6 @@ function checkClient(){
 
 function authorize() {
     return new Promise(function(resolve, reject){
-        console.log("Authorizing...")
         if(!Client)
             return reject('Bad client');
 
@@ -124,7 +235,6 @@ function authorize() {
             if(!tokenData)
                 return handleNew();
 
-            console.log("Authorizing...", tokenData.access_token);
             setToken(tokenData);
             return resolve({status: true})
         })
@@ -169,7 +279,6 @@ function completeAuth(code){
 }
 
 function transformQuery(query){
-    var operators = ['<', '=', '>', '!'];
     var queryStr = '';
     query = query || {};
     var keys = Object.keys(query);
@@ -185,27 +294,26 @@ function transformQuery(query){
                 val = 'application/vnd.google-apps.folder'
         }
 
-        // ugh
-        // https://stackoverflow.com/questions/34735220/google-drive-api-query-by-name-returns-invalid/34776881
-        if(key === 'title'){
+        if(key === 'title')
             key = 'name';
-        }
 
-        var firstChar = val.charAt(0);
-        // {modifiedData: ['>', ['']]}
-        if(operators.indexOf(firstChar) >= 0){
-            var part = key + "'" + val + "'";
+
+        if(Array.isArray(val)){
+            var part = singleQuote(key) + " " + val[0] + " "+(val[0] === 'in'?val[1]:singleQuote(val[1]));
         }
         else {
-            var part = key + "='" + val + "'";
+            var part = key + "=" + singleQuote(val);
         }
 
         part = "(" + part + ")"
         queryStr += part;
     })
 
-    console.log(queryStr);
     return queryStr;
+}
+
+function singleQuote(val){
+    return "'" + val + "'";
 }
 
 function normalizeListings(fileItem){
