@@ -153,23 +153,41 @@ function doList(name, parentID){
             })
         })
     })
-
 }
 
-function createFile(filePath, type, body){
+function createFile(filePath, type, bodyStream){
     var parentPath = Path.dirname(filePath);
+    var fileName = Path.basename(filePath);
+    var parentID;
     return getFolderID(parentPath, true)
-    .then((parentID)=>{
+    .then((_parentID)=>{
+        parentID = _parentID;
+        return checkExistingFile(fileName, parentID)
+    })
+    .then((fileID)=>{
+        if(fileID)
+            return doUpdate(fileID, bodyStream);
+
         return doCreate({
             type        : type,
-            name        : Path.basename(filePath),
-            body        : body,
+            name        : fileName,
+            body        : bodyStream,
             folder      : parentID,
         })
     })
     .then((item)=>{
         setCache(filePath, item.id);
         return item;
+    })
+}
+
+function checkExistingFile(fileName, parentID){
+    return doList(fileName, parentID)
+    .then((response)=>{
+        if(!response.data.length)
+            return false;
+
+        return response.data[0]['id']
     })
 }
 
@@ -197,15 +215,27 @@ function doCreate(options){
         if(options.folder)
             resource.parents = [options.folder]
 
-        Drive.files.create({
-            resource,
-            media,
-        }, function (err, results) {
+        Drive.files.create({resource, media}, (err, results)=>{
             if (err)
                 return reject(err);
 
             return resolve(normalizeListings(results.data))
         });
+    })
+}
+
+function doUpdate(fileId, bodyStream){
+    return new Promise((resolve, reject)=>{
+        var media = {
+            body    : bodyStream
+        };
+
+        Drive.files.update({media, fileId}, (err, results)=>{
+            if (err)
+                return reject(err);
+
+            return resolve(normalizeListings(results.data))
+        })
     })
 }
 
