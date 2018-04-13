@@ -12,15 +12,38 @@ var Client;
 var Drive;
 var Scopes = [];
 var CachedPaths = {};
+var Credentials;
 
 module.exports = {
-    authorize       : authorize,
-    completeAuth    : completeAuth,
-    checkClient     : checkClient,
     createClient    : createClient,
     list            : listFiles,
     uploadFile      : createFile,
     createFolder    : createFolder,
+    tokenCheck      : tokenCheck,
+}
+
+function createClient(credentials, scopes){
+    Credentials = credentials;
+
+    // https://github.com/google/google-api-nodejs-client/issues/253#issuecomment-51705964
+    Client = new OAuth2Client();
+
+    Client.setCredentials({
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token,
+    });
+
+    Drive = google.drive({version: 'v3', auth: Client});
+
+    if(!Array.isArray(scopes))
+        scopes = [scopes];
+
+    Scopes = scopes;
+}
+
+function tokenCheck(){
+    console.log('token check', Credentials.access_token)
+    return Client.getTokenInfo(Credentials.access_token);
 }
 
 function getFolderID(dirPath, doMakeDir){
@@ -121,6 +144,7 @@ function breakDownFolders(p){
 }
 
 function listFiles(dirPath){
+    console.log("listFiles", dirPath)
     return getFolderID(dirPath)
     .then((folderID)=>{
         if(!folderID)
@@ -143,9 +167,13 @@ function doList(name, parentID){
         if(name)
             queryObj.name = name;
 
+        console.log("doList", name, parentID)
         Drive.files.list({q: transformQuery(queryObj)}, (err, response)=>{
-            if(err)
+            if(err){
+                console.log(err);
                 return reject(err);
+            }
+
 
             resolve({
                 data : response.data.files.map(normalizeListings),
@@ -239,48 +267,6 @@ function doUpdate(fileId, bodyStream){
     })
 }
 
-function createClient(credentials, scopes){
-    Client = new OAuth2Client(credentials.clientID, credentials.clientSecret, credentials.redirectURL);
-
-    Drive = google.drive({version: 'v3', auth: Client});
-
-    if(!Array.isArray(scopes))
-        scopes = [scopes];
-
-    Scopes = scopes;
-}
-
-
-function checkClient(){
-    return !!Client;
-}
-
-function authorize() {
-    return new Promise(function(resolve, reject){
-        if(!Client)
-            return reject('Bad client');
-
-        util.getToken(PROVIDER_KEY)
-        .then(function(tokenData){
-            if(!tokenData)
-                return handleNew();
-
-            setToken(tokenData);
-            return resolve({status: true})
-        })
-        .catch(handleNew);
-
-        function handleNew(){
-            var url = requestAuthURL();
-            return resolve({status: false, authURL: url})
-        }
-    })
-}
-
-function setToken(token){
-    Client.setCredentials(token);
-}
-
 function requestAuthURL(){
     const authUrl = Client.generateAuthUrl({
         access_type : 'offline',
@@ -288,24 +274,6 @@ function requestAuthURL(){
     });
 
     return authUrl;
-}
-
-// after user returns with code
-function completeAuth(code){
-    return new Promise((resolve, reject)=>{
-        Client.getToken(code, (err, token) => {
-            if(err)
-                return reject(err);
-
-            // store token
-            util.updateToken(PROVIDER_KEY, token)
-            .then(()=>{
-                setToken(token);
-                resolve({status: true});
-            })
-            .catch(reject)
-        })
-    })
 }
 
 function transformQuery(query){

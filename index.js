@@ -1,7 +1,3 @@
-// here's my buffer
-// here's the directory
-// here's the provider
-// here's the public key
 const util = require('./util.js');
 
 var Provider = {
@@ -10,14 +6,15 @@ var Provider = {
 
 module.exports = setProvider;
 
-// credentials: client_secret, client_id, redirect url
-function setProvider(provider, credentials, scopes){
+// access_token, refresh_token
+function setProvider(provider, tokenData){
     if(!Provider[provider])
         throw 'Bad provider';
 
     util.checkTokenFile();
+    util.setToken(provider, tokenData)
 
-    Provider[provider].createClient(credentials, scopes);
+    Provider[provider].createClient(tokenData);
 
     return Provider[provider];
 }

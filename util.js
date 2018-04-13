@@ -5,7 +5,7 @@ const config    = require('./config');
 module.exports = {
     checkTokenFile  : checkTokenFile,
     getToken        : getToken,
-    updateToken     : updateToken,
+    setToken        : setToken,
 }
 
 function getToken(provider){
@@ -15,7 +15,7 @@ function getToken(provider){
     })
 }
 
-function updateToken(provider, token){
+function setToken(provider, token){
     return getTokenData()
     .then(function(tokenData){
         tokenData[provider] = token;
