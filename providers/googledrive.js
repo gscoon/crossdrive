@@ -2,6 +2,7 @@ const fs            = require('fs');
 const {google}      = require('googleapis');
 const async         = require('async');
 const Path          = require('path');
+const debug         = require('debug')('xdrive-google');
 const OAuth2Client  = google.auth.OAuth2;
 
 const util          = require('../util');
@@ -17,9 +18,11 @@ var Credentials;
 module.exports = {
     createClient    : createClient,
     list            : listFiles,
-    uploadFile      : createFile,
+    upload          : createFile,
     createFolder    : createFolder,
     tokenCheck      : tokenCheck,
+    deleteFile      : deleteFile,
+    download        : downloadFile,
 }
 
 function createClient(credentials, scopes){
@@ -42,7 +45,7 @@ function createClient(credentials, scopes){
 }
 
 function tokenCheck(){
-    console.log('token check', Credentials.access_token)
+    debug('token check', Credentials.access_token)
     return Client.getTokenInfo(Credentials.access_token);
 }
 
@@ -144,7 +147,7 @@ function breakDownFolders(p){
 }
 
 function listFiles(dirPath){
-    console.log("listFiles", dirPath)
+    debug("listFiles", dirPath)
     return getFolderID(dirPath)
     .then((folderID)=>{
         if(!folderID)
@@ -167,10 +170,10 @@ function doList(name, parentID){
         if(name)
             queryObj.name = name;
 
-        console.log("doList", name, parentID)
+        debug("doList", name, parentID)
         Drive.files.list({q: transformQuery(queryObj)}, (err, response)=>{
             if(err){
-                console.log(err);
+                debug(err);
                 return reject(err);
             }
 
@@ -207,6 +210,48 @@ function createFile(filePath, type, bodyStream){
         setCache(filePath, item.id);
         return item;
     })
+}
+
+function downloadFile(filePath){
+    var parentPath = Path.dirname(filePath);
+    var fileName = Path.basename(filePath);
+    return getFolderID(parentPath)
+    .then((parentID)=>{
+        return checkExistingFile(fileName, parentID)
+    })
+    .then((fileId)=>{
+        return  Drive.files.get({
+            fileId: fileId,
+            alt: 'media'
+        }, {responseType: 'stream'})
+    })
+    .then((response)=>{
+        return response.data;
+    })
+}
+
+function deleteFile(filePath){
+    return new Promise((resolve, reject)=>{
+        var parentPath = Path.dirname(filePath);
+        var fileName = Path.basename(filePath);
+        return getFolderID(parentPath)
+        .then((parentID)=>{
+            return checkExistingFile(fileName, parentID)
+        })
+        .then((fileId)=>{
+            if(!fileId)
+                return resolve();
+
+            Drive.files.delete({fileId}, function(err, data){
+                if(err)
+                    return reject(err);
+
+                return resolve(data);
+            })
+        })
+        .catch(reject)
+    })
+
 }
 
 function checkExistingFile(fileName, parentID){

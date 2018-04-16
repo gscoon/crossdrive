@@ -1,4 +1,7 @@
+require('dotenv').config();
+
 const util = require('./util.js');
+const debug = require('debug')('crossdrive');
 
 var Provider = {
     googledrive: require('./providers/googledrive.js')
