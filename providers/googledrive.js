@@ -5,7 +5,7 @@ const Path          = require('path');
 const debug         = require('debug')('xdrive-google');
 const OAuth2Client  = google.auth.OAuth2;
 
-const util          = require('../util');
+const util          = require(Path.join(__dirname, '../util'));
 
 const PROVIDER_KEY  = 'googledrive';
 

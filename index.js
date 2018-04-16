@@ -1,10 +1,10 @@
 require('dotenv').config();
-
-const util = require('./util.js');
-const debug = require('debug')('crossdrive');
+const Path      = require('path');
+const util      = require(Path.join(__dirname,'./util.js'));
+const debug     = require('debug')('crossdrive');
 
 var Provider = {
-    googledrive: require('./providers/googledrive.js')
+    googledrive: require(Path.join(__dirname, './providers/googledrive.js'))
 }
 
 module.exports = setProvider;
