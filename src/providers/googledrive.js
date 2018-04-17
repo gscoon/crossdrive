@@ -1,11 +1,8 @@
-const fs            = require('fs');
 const {google}      = require('googleapis');
 const async         = require('async');
-const Path          = require('path');
+const Path          = require('react-native-path');
 const debug         = require('debug')('xdrive-google');
 const OAuth2Client  = google.auth.OAuth2;
-
-const util          = require('../util.js');
 
 const PROVIDER_KEY  = 'googledrive';
 

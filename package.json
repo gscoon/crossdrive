@@ -1,11 +1,22 @@
 {
     "name": "crossdrive",
+    "version": "0.0.1",
+    "scripts": {
+        "browser": "browserify --debug src/index.js -o dist/crossdrive.js",
+        "webpack": "npx webpack"
+    },
     "dependencies": {
         "async": "^2.6.0",
         "debug": "^3.1.0",
         "dotenv": "^5.0.1",
-        "googleapis": "^28.1.0"
+        "googleapis": "^28.1.0",
+        "react-native-path": "^0.0.5"
     },
-	"main" : "src/index.js",
-  "browser" : "dist/crossdrive"
+    "main": "./src/index.js",
+    "browser":"./dist/crossdrive.js",
+    "devDependencies": {
+        "empty-module": "^0.0.2",
+        "webpack": "^4.5.0",
+        "webpack-cli": "^2.0.14"
+    }
 }

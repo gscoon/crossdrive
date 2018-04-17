@@ -1,5 +1,5 @@
 const fs        = require('fs');
-const Path      = require('path');
+const Path      = require('react-native-path');
 const config    = require('./config');
 
 module.exports = {
