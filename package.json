@@ -3,7 +3,7 @@
     "version": "0.0.1",
     "scripts": {
         "browser": "browserify --debug src/index.js -o dist/crossdrive.js",
-        "webpack": "npx webpack"
+        "webpack": "npx webpack --mode=development"
     },
     "dependencies": {
         "async": "^2.6.0",
