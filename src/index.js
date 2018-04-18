@@ -4,8 +4,7 @@ const Path      = require('react-native-path');
 const debug     = require('debug')('crossdrive');
 
 var Provider = {
-    "googledrive-browser" : require('./providers/googledrive-browser.js'),
-    googledrive: require('./providers/googledrive.js'),
+    googledrive: require('./providers/googledrive-all-platforms.js'),
 }
 
 module.exports = setProvider;

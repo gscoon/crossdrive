@@ -1,11 +1,10 @@
-const path = require('path');
-const webpack = require('webpack');
+const path      = require('path');
+const webpack   = require('webpack');
 
 module.exports = {
     entry: path.resolve(__dirname, './src/index.js'),
     resolve : {
         alias : {
-            googleapis: path.resolve(__dirname, './src/fakegoogle.js'),
         }
     },
     output: {

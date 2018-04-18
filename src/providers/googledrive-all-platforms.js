@@ -132,7 +132,7 @@ function getFolderID(dirPath, doMakeDir){
 // 4. If doesnt exist in provider, then create
 function setAllFolderIDs(dirPath, makeDir){
     return new Promise((resolve, reject)=>{
-        var breakDown = util.google.breakDownFolders(dirPath);
+        var breakDown = breakDownFolders(dirPath);
         if(!breakDown || !breakDown.length)
             return resolve(null);
 
@@ -213,11 +213,11 @@ function reqList(name, parentID){
     return asyncReq({
         method  : 'GET',
         url     : fullURL,
-        params  : {q: util.google.transformQ(qObj)},
+        params  : {q: transformQ(qObj)},
     })
     .then((response)=>{
         return {
-            data : response.data.files.map(util.google.normalize),
+            data : response.data.files.map(normalize),
             next : response.data.nextPageToken,
         }
     })
@@ -267,7 +267,7 @@ function reqCreate(options){
         headers : headers
     })
     .then((results)=>{
-        return util.google.normalize(results.data)
+        return normalize(results.data)
     })
 }
 
@@ -300,7 +300,8 @@ function asyncReq(options){
     })
 }
 
-// fuck you axios
+// Fuckin axios
+// Thank you - https://github.com/janakaud/drive/blob/master/drive.js#L168
 function buildMultipart(resource, media, boundary){
     var mimeType = media.mimeType || (resource && resource.mimeType);
 
@@ -327,4 +328,58 @@ function setCache(p, id){
         basename    : Path.basename(p),
         id          : id,
     }
+}
+
+// turn path into array of paths
+// "/aa/bb" => ["/aa", "/aa/bb"]
+function breakDownFolders(p){
+    var ret = [];
+    var pSplit = p.split('/');
+    pSplit.forEach((x, index)=>{
+        var key = pSplit.slice(0,index+1).join('/');
+        if(!key || key === '/') return;
+        ret.push(key);
+    })
+    return ret;
+}
+
+function normalize(fileItem){
+    fileItem.title = fileItem.name;
+    fileItem.type = fileItem.mimeType == 'application/vnd.google-apps.folder' ? 'folder' : 'file';
+
+    return fileItem;
+}
+
+function transformQ(query){
+    var queryStr = '';
+    query = query || {};
+    var keys = Object.keys(query);
+    keys.forEach(function(key){
+        if(queryStr)
+            queryStr += ' AND ';
+
+        var val = query[key];
+
+        if(key === 'type'){
+            key = 'mimeType';
+            if(val === 'folder')
+                val = 'application/vnd.google-apps.folder'
+        }
+
+        if(key === 'title')
+            key = 'name';
+
+
+        if(Array.isArray(val)){
+            var part = util.singleQuote(key) + " " + val[0] + " "+(val[0] === 'in'?val[1]:util.singleQuote(val[1]));
+        }
+        else {
+            var part = key + "=" + util.singleQuote(val);
+        }
+
+        part = "(" + part + ")"
+        queryStr += part;
+    })
+
+    return queryStr;
 }
